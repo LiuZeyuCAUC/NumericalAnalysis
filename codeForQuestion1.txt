@@ -1,0 +1,874 @@
+//main.cpp;主程序
+#include<iostream>
+#include<needed.h>               //所需自己定义的头文件的声明
+#include<fstream>
+using namespace std;
+void main()
+{
+	int i,j,k;
+	const int n=501,r=2,s=2;
+	const double eps=10e-12;
+	double bate,lamda1,lamda501,lamdas,lamdam,uk,det,cond,temp;
+	double lamda[39];
+	ofstream outfile("date.txt");
+
+	//输出设置
+	cout<<setprecision(12);
+	cout<<setiosflags(ios::scientific);
+	outfile<<setprecision(12);
+	outfile<<setiosflags(ios::scientific);
+
+	//将题中的带状矩阵压缩保存
+	double A[r+s+1][n]={0.0};                                    
+	for(i=0;i<501;i++)
+	{
+		for(j=0;j<501;j++)
+		{
+			if(i==j)
+				A[s][j]=(1.64-0.024*(i+1))*sin(0.2*(i+1))-0.64*exp(0.1/(i+1));
+			if((i-j)==1||(j-i)==1)
+				A[i-j+s][j]=0.16;
+			if((i-j)==2||(j-i)==2)
+				A[i-j+s][j]=-0.064;
+		}
+	}
+
+	//将二维数组转化成带状矩阵类的对象c
+	bandedmatrix<double> c(&A[0][0],s,r,n);
+	//b是初始迭代向量
+	valarray<double> b(0.0,n);
+	bate=1.0;
+	for(i=0;i<n;i++)
+	{	
+			b[i]=1.0;
+	}
+	 //用幂法求矩阵按模最大特征向量，返回1，迭代成功；返回0，迭代失败
+	if(MatrixEigenvaluemi(c,b,1,bate,eps,2000))        
+	{
+		lamdam=bate;
+		if(lamdam<0)
+		{
+			lamda1=bate;
+			for(i=0;i<n;i++)
+			{
+				c(s,i)=c(s,i)-lamda1;
+				b[i]=1.0;
+			}
+			if(MatrixEigenvaluemi(c,b,1,bate,eps,2000))
+			{
+				lamda501=bate+lamda1;
+			}
+			else
+			{
+				cout<<"迭代失败！"<<endl;
+			}
+		}
+		else
+		{
+			lamda501=bate;
+			for(i=0;i<n;i++)
+			{
+				c(s,i)=c(s,i)-lamda501;
+				b[i]=1.0;
+			}
+			if(MatrixEigenvaluemi(c,b,1,bate,eps,2000))
+			{
+				lamda1=bate+lamda501;
+			}
+		}
+	}
+	else
+	{
+		cout<<"幂法迭代失败！"<<endl;
+	}
+	
+	bandedmatrix<double> d(&A[0][0],s,r,n);
+	bate=1.0;
+	for(i=0;i<n;i++)
+	{
+		b[i]=1.0;
+	}
+	//用反幂法求矩阵按模最小的特征向量，返回1，迭代成功；返回0，迭代失败
+	if(MatrixEigenvaluefanmi(d,b,1,bate,eps,2000))
+	{
+		lamdas=bate;
+	}
+	else
+	{
+		cout<<"反幂法迭代失败！"<<endl;
+	}
+	//求A的行列式的值
+	temp=1.0;
+	for(i=0;i<n;i++)
+		temp*=d(s,i);
+	det=temp;
+	//求A的条件数(谱范数)
+	cond=Abs(lamdam/lamdas);
+
+	cout<<"最大特征值与最小特征值是："<<endl;
+	outfile<<"最大特征值与最小特征值是："<<endl;
+	cout<<"λ1="<<lamda1<<"  λ501="<<lamda501<<endl;
+	outfile<<"λ1="<<lamda1<<"  λ501="<<lamda501<<endl;
+	cout<<"按模最小的特征值是："<<endl;
+	outfile<<"按模最小的特征值是："<<endl;
+	cout<<"λs="<<lamdas<<endl;
+	outfile<<"λs="<<lamdas<<endl;
+	//用带原点位移的反幂法求λik的值
+	for(k=1;k<=39;k++)
+	{
+		uk=(lamda501-lamda1)/40;
+		uk=k*uk;
+		uk=lamda1+uk;
+		cout<<"u"<<k<<"="<<uk<<endl;
+		outfile<<"u"<<k<<"="<<uk<<endl;
+		for(i=0;i<r+s+1;i++)
+		{
+			for(j=0;j<n;j++)
+			{
+				d(i,j)=A[i][j];
+				b[j]=1.0;
+			}
+		}
+		bate=1.0;
+		for(i=0;i<n;i++)
+			d(s,i)=d(s,i)-uk;
+		if(MatrixEigenvaluefanmi(d,b,0,bate,eps,2000))
+		{
+			lamda[k-1]=bate+uk;
+			cout<<"与u"<<k<<"最接近的特征值是："<<lamda[k-1]<<endl;
+			outfile<<"与u"<<k<<"最接近的特征值是："<<lamda[k-1]<<endl;
+		}
+		else
+		{
+			cout<<"求λu"<<k<<"k时，反幂法迭代失败！"<<endl;
+			outfile<<"求λu"<<k<<"k时，反幂法迭代失败！"<<endl;
+		}
+
+	}
+	cout<<"矩阵A的条件数(谱范数)是："<<endl;
+	outfile<<"矩阵A的条件数(谱范数)是："<<endl;
+	cout<<"cond(A)2="<<cond<<endl;
+	outfile<<"cond(A)2="<<cond<<endl;
+	cout<<"矩阵A对应的行列式的值是："<<endl;
+	outfile<<"矩阵A对应的行列式的值是："<<endl;
+	cout<<"det(A)="<<det<<endl;
+	outfile<<"det(A)="<<det<<endl;
+}
+
+//needed.h ；矩阵类及其派生类的定义；自定义函数的声明
+# ifndef _NEEDED_H
+# define _NEEDED_H
+
+# include<complex>
+# include<valarray>
+# include<cmath>
+# include<iomanip>
+using namespace std;
+
+//取x的绝对值
+template <class T>
+long double Abs(const T& x);
+
+//x的符号函数
+template <class T>
+T Sgn(const T&x);
+
+template <class T>
+class matrix                             //矩阵类的定义
+{
+	typedef matrix<T> _Myt;
+	private:
+		std::valarray<T> m_Dates;       //定义一维数组对象m_Dates
+		int m_stRow;
+		int m_stCol;
+	public:
+		typedef T value_type;
+		//构造函数1
+		//*********
+		matrix(int stRow,int stCol): m_Dates(T(0),stRow*stCol),m_stRow(stRow),m_stCol(stCol)
+		{
+		//	m_Dates.resize(GetRowNum()*GetColNum(),T(0));
+		}
+		//构造函数2
+		//*********
+		matrix(const T* rhs,int stRow,int stCol): m_Dates(rhs, stRow*stCol),m_stRow(stRow),m_stCol(stCol)
+		{
+		}
+		//构造程序3
+		//*********
+		matrix(const _Myt& rhs):m_Dates(rhs.m_Dates),m_stRow(rhs.GetRowNum()),m_stCol(rhs.GetColNum())
+		{
+		}
+		int GetRowNum() const
+		{
+			return m_stRow;
+		}
+
+		int GetColNum() const
+		{
+			return m_stCol;
+		}
+
+
+		//重载运算符()获取二维矩阵某元素在一维数组m_Dates的位置
+		T& operator () (int stRow,int stCol)
+		{
+			Assert(stRow<GetRowNum());
+			Assert(stCol<GetColNum());
+
+			return m_Dates[stRow*GetColNum()+stCol];
+
+		}
+
+		const T operator () (int stRow,int stCol) const
+		{
+			Assert(stRow<GetRowNum());
+			Assert(stCol<GetColNum());
+			return m_Dates[stRow*GetColNum()+stCol];
+		}
+
+		//重载赋值操作符
+		_Myt& operator += (const _Myt& rhs)
+		{
+			Assert(GetRowNum()==rhs.GetRowNum());
+			Assert(GetColNum()==rhs.GetColNum());
+			//利用valarray类的性质
+			m_Dates += rhs.m_Dates;
+			//结果返回左矩阵，返回指向左矩阵的指针
+			return *this;
+		}
+
+		_Myt& operator -= (const _Myt& rhs)
+		{
+			Assert(GetRowNum()==rhs.GetRowNum());
+			Assert(GetColNum()==rhs.GetColNum());
+			//利用valarray类的性质
+			m_Dates -= rhs.m_Dates;
+			//结果返回左矩阵，返回指向左矩阵的指针
+			return *this;
+		}
+		
+		_Myt& operator *= (const _Myt&rhs)
+		{
+			MatrixMultiply(*this,*this,rhs);
+			return *this;
+		}
+
+		//矩阵自反加减乘除以数
+		_Myt& operator += (const T& rhs)
+		{
+			m_Dates += rhs;
+			return *this;
+		}
+
+		_Myt& operator -= (const T& rhs)
+		{
+			m_Dates -= rhs;
+			return *this;
+		}
+
+		_Myt& operator *= (const T& rhs)
+		{
+			m_Dates *= rhs;
+			return *this;
+		}
+
+		_Myt& operator /= (const T& rhs)
+		{
+			m_Dates /= rhs;
+			return *this;
+		}
+
+		//一元操作符 对矩阵每个元素赋予+或-号
+		_Myt operator + () const
+		{
+			return *this;
+		}
+
+		_Myt operator - () const
+		{
+			_Myt mat(*this);
+			mat.m_Dates= -mat.m_Dates;  
+			return mat;
+		}
+
+		//二元操作符
+		//矩阵加数
+		friend _Myt operator + (const _Myt& lhs,const T& rhs)
+		{
+			_Myt mat(lhs);
+			mat.m_Dates += rhs;
+			return mat;
+		}
+
+		//矩阵减数
+		friend _Myt operator - (const _Myt& lhs,const T& rhs)
+		{
+			_Myt mat(lhs);
+			mat.m_Dates -= rhs;
+			return mat;
+		}
+
+		//矩阵乘以数 
+		friend _Myt operator * (const _Myt& lhs,const T& rhs)
+		{
+			_Myt mat(lhs);
+			mat.m_Dates *= rhs;
+			return mat;
+		}
+
+		//矩阵除以数
+		friend _Myt operator / (const _Myt& lhs,const T& rhs)
+		{
+			_Myt mat(lhs);
+			mat.m_Dates /= rhs;
+			return mat;
+		}
+
+		//数加矩阵
+		friend _Myt operator + (const T& lhs,const _Myt& rhs)
+		{
+			_Myt mat(rhs);
+			mat.m_Dates += lhs;
+			return mat;
+		}
+
+		//数减矩阵
+		friend _Myt operator - (const T& lhs,const _Myt& rhs)
+		{
+			_Myt mat(rhs);
+			mat.m_Dates = lhs - mat.m_Dates;
+
+			return mat;
+		}
+
+		//数乘以矩阵
+		friend _Myt operator * (const T& lhs,const _Myt& rhs)
+		{
+			_Myt mat(rhs);
+			mat.m_Dates *= lhs;
+
+			return mat;
+		}
+
+		//矩阵加矩阵
+		friend _Myt operator + (const _Myt& lhs,const _Myt& rhs)
+		{
+			_Myt mat(lhs);
+			mat.m_Dates += rhs.m_Dates;
+
+			return mat;
+		}
+
+		//矩阵减矩阵
+		friend _Myt operator - (const _Myt& lhs,const _Myt& rhs)
+		{
+			_Myt mat(lhs);
+			mat.m_Dates -= rhs.m_Dates;
+
+			return mat;
+		}
+
+		//矩阵乘以矩阵
+		friend _Myt operator * (const _Myt& lhs,const _Myt& rhs)
+		{
+			_Myt mTmp(lhs.GetRowNum(),rhs.GetColNum());
+
+			MatrixMultiply(mTmp,lhs,rhs);
+
+			return mTmp;
+		}
+
+		//矩阵比较
+		//比较两矩阵是否不相等，若不相等返回TRUE,否则返回FALSE
+		friend bool operator != (const _Myt& lhs, const _Myt&rhs)
+		{
+			if (lhs.GetRowNum() != rhs.GetRowNum())
+				return true;
+			if (lhs.GetColNum() != rhs.GetColNum())
+				return true;
+
+
+			for(int i=0;i<lhs.m_Dates.size();i++)
+			{
+				if(lhs.m_Dates[i] != rhs.m_Dates[i])
+					return true;
+			}
+			return false;
+		}
+
+		//比较两矩阵是否相等，若相等返回TRUE,否则返回FALSE
+		friend bool operator == (const _Myt& lhs, const _Myt&rhs)
+		{
+			if (lhs.GetRowNum() != rhs.GetRowNum())
+				return false;
+			if (lhs.GetColNum() != rhs.GetColNum())
+				return false;
+
+
+			for(int i=0;i<lhs.m_Dates.size();i++)
+			{
+				if(lhs.m_Dates[i] != rhs.m_Dates[i])
+					return false;
+			}
+			return true;
+		}
+
+};
+
+//矩阵类的派生类，带状矩阵类
+template <class T>
+class bandedmatrix:public matrix<T>
+{
+	private:
+		int rNum;     //带状矩阵下半带宽
+		int sNum;     //带状矩阵上半带宽
+	public:
+		bandedmatrix(int sets,int setr,int setn):matrix<T>(setr+sets+1,setn),rNum(setr),sNum(sets)
+		{
+		}
+		bandedmatrix(const T* rhs,int sets,int setr,int setn): matrix<T>(rhs,sets+setr+1,setn),rNum(setr),sNum(sets)
+		{
+		}
+	bandedmatrix(bandedmatrix& rhs):
+matrix<T>(rhs),rNum(rhs.GetrNum()),sNum(rhs.GetsNum())
+		{
+		}
+		int GetrNum()
+		{
+			return rNum;
+		}
+		int GetsNum()
+		{
+			return sNum;
+		}
+};
+
+//矩阵乘法函数
+template <class Tout,class Tlhs,class Trhs>
+matrix<Tout>& MatrixMultiply(matrix<Tout>& mOut,const matrix<Tlhs>& lhs,const matrix<Trhs>& rhs);
+
+//直接Doolittle分解法(带状矩阵)，直接改动被分解的矩阵a
+template <class T>
+int nMatrixLU(bandedmatrix<T>& c);
+
+//以下是求矩阵特征值的各种方法
+
+//求矩阵按模最大特征值与相应特征向量的幂法
+//a是待求带状矩阵，u输入初始迭代向量u0，输出属于按模最大特征值对应的特征向量，bate是按模最大特征值,eps是精度要求;c=true,按2范数归一，c=false,按无穷范数归一,total是迭代的最大步数
+template <class T>
+int MatrixEigenvaluemi(bandedmatrix<T>& a,valarray<T>& u,bool c,T &bate,T eps,int total); 
+
+//求矩阵按模最小特征值与相应特征向量的反幂法
+//a是待求带状矩阵，u输入初始迭代向量u0，输出属于按模最小特征值对应的特征向量，bate是按模最小特征值的倒数(最后输出按模最小特征值),eps是精度要求;c=true,按2范数归一，c=false,按无穷范数归一,total是迭代的最大步数
+template <class T>
+int MatrixEigenvaluefanmi(bandedmatrix<T>& a,valarray<T>& u,bool c,T &bate,T eps,int total);
+
+# include "needed.inl"
+#endif
+
+//needed.inl ；needed.h中函数的实现
+# ifndef _NEEDED_INL
+# define _NEEDED_INL
+
+template <class T>
+long double Abs(const T& x)            //求绝对值函数
+{
+	long double temp;
+	if (x<0)
+		temp=(long double)(-1.0*x);
+	else
+		temp=x;
+	return (temp);
+
+}
+
+template <class T>                      
+T Sgn(const T&x)                        //符号函数
+{
+	T temp;
+	if(x<0)
+		temp=-1;
+	else if(x>0)
+		temp=1;
+	else
+		temp=0;
+	return (temp);
+}
+
+template<class T>
+T min( T x, T y)                     //求最小值函数
+{
+	T temp;
+	temp=(x>y?y:x);
+	return temp;
+}
+
+template<class T>
+T max( T x, T y)                     //求最大值函数
+{
+	T temp;
+	temp=(x>y?x:y);
+	return temp;
+}
+
+template <class Tout,class Tlhs,class Trhs>
+matrix<Tout>& MatrixMultiply(matrix<Tout>& mOut,const matrix<Tlhs>& lhs,const matrix<Trhs>& rhs)
+{
+	bool isok(true);
+	int i,j,n,RowNo,ColNo,ic;
+	Tout m;
+	matrix<Tout> mOut1(mOut);
+	//先判定是否满足矩阵相乘的条件
+	if ((lhs.GetColNum()!=rhs.GetRowNum())||(mOut.GetRowNum()!=lhs.GetRowNum())||(mOut.GetColNum()!=rhs.GetColNum()))
+		isok=false;
+	if(isok)
+	{
+		RowNo=mOut.GetRowNum();
+		ColNo=mOut.GetColNum();
+		ic=lhs.GetColNum();
+		for(i=0;i<RowNo;i++)
+		{
+			for(j=0;j<ColNo;j++)
+			{
+				m=0.0;
+				for(n=0;n<ic;n++)
+					m=m+lhs(i,n)*rhs(n,j);
+				mOut1(i,j)=m;
+
+			}
+		}
+		//由于运算符*=重载时也要调用此函数，因此必须构造一个临时矩阵mOut1用以存放矩阵相乘后的各项元素（参见从*=重载函数传递过来的参数）
+		//计算结束后，将mOut1的结果赋给mOut，用作函数的返回值
+		mOut=mOut1;
+		return  mOut;
+				
+	}
+	else
+	{
+		cout<<"形成的矩阵有误，请检查！"<<endl;
+		return  mOut;
+	}
+
+
+}
+//LU分解
+template <class T>
+int nMatrixLU(bandedmatrix<T>& c)    //返回0，表示某一步分解时主元为0，返回1表示运行正常结束，分解成功
+{
+	int i,k,n,r,s,j,temp1,temp2,t;
+	T temp;
+	n=c.GetColNum();
+	r=c.GetrNum();
+	s=c.GetsNum();
+
+	for(k=0;k<n;k++)
+	{
+			
+		temp1=min(k+s,n-1);
+		for(j=k;j<=temp1;j++)
+		{	
+			temp2=max(0,k-r);
+			temp2=max(temp2,j-s);
+			temp=0.0;
+
+			for(t=temp2;t<=(k-1);t++)
+				temp+=c(k-t+s,t)*c(t-j+s,j);
+				
+			c(k-j+s,j)=c(k-j+s,j)-temp;
+				
+		}
+			
+		if(c(s,k)==0.0)
+		{
+			cout<<"在进行第"<<k+1<<"步LU分解时失败！"<<endl;
+			return 0;
+		}
+		else
+		{
+				
+			temp1=min(k+r,n-1);
+			for(i=k+1;(i<=temp1)&&(k<n-1);i++)
+			{
+				temp2=max(0,i-r);
+				temp2=max(temp2,k-s);
+				temp=0.0;
+
+				for(t=temp2;t<=k-1;t++)
+					temp+=c(i-t+s,t)*c(t-k+s,k);
+
+				c(i-k+s,k)=(c(i-k+s,k)-temp)/c(s,k);
+			}
+				
+		}	
+	}
+	return 1;
+}
+
+//求矩阵按模最大特征值与相应特征向量的幂法
+//a是待求矩阵，u输入初始迭代向量u0，输出属于按模最大特征值对应的特征向量，bate是按模最大特征值,eps是精度要求;c=true,按2范数归一，c=false,按无穷范数归一,total是迭代的最大步数
+template <class T>
+int MatrixEigenvaluemi(bandedmatrix<T>& a,valarray<T>& u,bool c,T &bate,T eps,int total)  //返回1，迭代成功，返回0迭代失败
+{
+	int n,k,i,j,t,m(0),r,s,m1;
+	T temp,bate1,ita,ita1;
+
+	m1=a.GetRowNum();
+	n=a.GetColNum();
+	r=a.GetrNum();
+	s=a.GetsNum();
+	valarray<T> y(0.0,n);
+ 
+	if(c==true)                              //用2范数进行归一
+	{
+		for(k=1;k<=total;k++)
+		{
+			//求向量u(k-1)的模
+			temp=0.0;
+			for(i=0;i<n;i++)
+			{
+				temp+=u[i]*u[i];
+			}
+			ita=sqrt(temp);
+			//归一化
+			for(i=0;i<n;i++)
+			{
+				y[i]=u[i]/ita;
+			}
+			//求uk
+			for(i=0;i<n;i++)
+			{
+				temp=0.0;
+				j=0;
+				for(j=max(0,i-r);j<=min(n-1,i+s);j++)
+				{
+					temp+=a(i-j+s,j)*y[j];
+				}
+				u[i]=temp;
+			}
+			if(k>1)
+				bate1=bate;
+			temp=0.0;
+			for(i=0;i<n;i++)
+				temp+=y[i]*u[i];
+			bate=temp;
+			if(k>1)
+			{
+				temp=Abs(bate-bate1);
+				if(temp/(Abs(bate))<=eps)
+				{
+					for(i=0;i<n;i++)
+						u[i]=y[i];
+					return 1;
+				}
+			}
+		}
+		cout<<"迭代次数超过最大迭代次数，求解失败!"<<endl;
+		return 0;
+	}
+	else                                    //用无穷范数进行归一
+	{	ita=Abs(u[0]);
+			
+		for(k=1;k<=total;k++)
+		{
+			ita1=Sgn(y[m]);
+			ita=Abs(u[0]);
+			//取向量u(k-1)绝对值最大的分量
+			m=0;
+			for(j=1;j<n;j++)
+			{
+				if(ita<Abs(u[j]))
+				{
+					ita=Abs(u[j]);
+					m=j;
+				}
+			}
+			ita=u[m];
+			bate1=bate;
+			bate=Sgn(ita1)*ita;
+			if(k>1)
+			{
+				temp=Abs(bate-bate1);
+				if(temp/Abs(bate)<=eps)
+				{
+					for(i=0;i<n;i++)
+						u[i]=y[i];
+					return 1;
+				}
+			}
+			//归一化处理
+			for(i=0;i<n;i++)
+			{
+				if(i!=m)
+				{
+					y[i]=u[i]/Abs(ita);
+				}
+				else
+				{
+					y[m]=Sgn(u[m]);
+				}
+			}
+			//求uk
+			for(i=0;i<n;i++)
+			{
+				temp=0.0;
+				for(t=max(0,i-r);t<=min(n-1,i+s);t++)
+					temp+=a(i-t+s,t)*y[t];
+				u[i]=temp;
+			}
+		}
+		cout<<"迭代次数超过最大迭代次数，求解失败!"<<endl;
+		return 0;
+	}
+}
+
+//求矩阵按模最小特征值与相应特征向量的反幂法
+//a是待求矩阵，u输入初始迭代向量u0，输出属于按模最小特征值对应的特征向量，bate是按模最小特征值的倒数(最后输出按模最小特征值),eps是精度要求;c=true,按2范数归一，c=false,按无穷范数归一,total是迭代的最大步数
+template <class T>
+int MatrixEigenvaluefanmi(bandedmatrix<T>& a,valarray<T>& u,bool c,T &bate,T eps,int total)
+{
+	int n,k,i,j,t,r(0),r1,s;
+	T temp,bate1,ita,ita1;
+
+	n=a.GetColNum();
+	r1=a.GetrNum();
+	s=a.GetsNum();
+	valarray<T> y(T(0),n);
+	valarray<T> y1(T(0),n);
+
+	if(nMatrixLU(a))
+	{
+		if(c==true)                              //用2范数进行归一
+		{
+				
+			for(k=1;k<=total;k++)
+			{
+				temp=0.0;
+				for(i=0;i<n;i++)
+					temp+=u[i]*u[i];
+				ita=sqrt(temp);
+
+				for(i=0;i<n;i++)
+					y[i]=u[i]/ita;
+
+				//求解方程组Au(k)=y(k-1)
+				for(i=0;i<n;i++)
+					y1[i]=y[i];
+				for(i=1;i<n;i++)
+				{
+					temp=0.0;
+					for(t=max(0,i-r1);t<=i-1;t++)
+						temp+=(a(i-t+s,t)*y1[t]);
+					y1[i]=y1[i]-temp;
+				}
+					
+				u[n-1]=y1[n-1]/a(s,n-1);
+				for(i=n-2;i>=0;i--)
+				{
+					temp=0.0;
+					for(t=i+1;t<=min(i+s,n-1);t++)
+						temp+=(a(i-t+s,t)*u[t]);
+					u[i]=(y1[i]-temp)/a(s,i);
+				}
+
+				if(k>1)
+				{
+					bate1=bate;
+				}
+				temp=0.0;
+				for(i=0;i<n;i++)
+					temp+=y[i]*u[i];
+				bate=temp;
+				if(k>1)
+				{
+					temp=Abs(1/bate-1/bate1);
+					if(temp*Abs(bate)<=eps)
+					{
+						bate=1/bate;
+						for(i=0;i<n;i++)
+							u[i]=y[i];
+						return 1;
+					}
+				}
+			}
+			cout<<"迭代数超过最大迭代数，求解失败!"<<endl;
+			return 0;
+		}
+		else
+		{
+			ita=Abs(u[0]);
+			for(k=1;k<=total;k++)
+			{
+				
+				ita1=Sgn(y[r]);
+					
+				ita=Abs(u[0]);
+		
+				//取向量u(k-1)绝对值最大的分量
+				r=0;
+				for(j=1;j<n;j++)
+				{
+					if(ita<Abs(u[j]))
+					{
+						ita=Abs(u[j]);
+						r=j;
+					}
+				}
+				ita=u[r];
+				bate1=bate;
+				bate=Sgn(ita1)*ita;
+
+				if(k>1)
+				{
+					temp=Abs(1/bate-1/bate1);
+					if(temp*Abs(bate)<=eps)
+					{
+						bate=1/bate;
+						for(i=0;i<n;i++)
+							u[i]=y[i];
+						return 1;
+					}
+							
+				}
+				//归一化处理
+				for(i=0;i<n;i++)
+				{
+					if(i!=r)
+					{
+						y[i]=u[i]/Abs(ita);
+					}
+					else
+					{
+						y[r]=Sgn(u[r]);
+					}
+				}
+				//求uk
+				for(i=0;i<n;i++)
+					y1[i]=y[i];
+				for(i=1;i<n;i++)
+				{
+					temp=0.0;
+					for(t=max(0,i-r1);t<=i-1;t++)
+						temp+=(a(i-t+s,t)*y1[t]);
+					y1[i]=y1[i]-temp;
+				}
+					
+				u[n-1]=y1[n-1]/a(s,n-1);
+				for(i=n-2;i>=0;i--)
+				{
+					temp=0.0;
+					for(t=i+1;t<=min(i+s,n-1);t++)
+						temp+=(a(i-t+s,t)*u[t]);
+					u[i]=(y1[i]-temp)/a(s,i);
+				}
+			}
+			cout<<"迭代次数超过最大迭代次数，求解失败!"<<endl;
+			return 0;
+		}
+	}
+	else
+	{
+		return 0;
+	}
+}
+# endif
